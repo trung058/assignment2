@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Home</title>
+</head>
+<body>
+  <% if (username) { %>
+    <h1>Welcome, <%= name %>!</h1>
+    <a href="/members">Go to Members Area</a> |
+    <a href="/logout">Logout</a>
+  <% } else { %>
+    <h1>Welcome to the App</h1>
+    <a href="/signup">Sign Up</a> |
+    <a href="/login">Log In</a>
+  <% } %>
+</body>
+</html>

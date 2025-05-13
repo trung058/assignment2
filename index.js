@@ -5,16 +5,13 @@ const MongoStore = require('connect-mongo');
 const bcrypt = require('bcrypt');
 const Joi = require('joi');
 const path = require('path');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 const port = process.env.PORT || 3000;
-
-// MongoDB URL and session secret from .env
-
 const mongoUrl = process.env.MONGODB_URI;
 
-
-// Middleware
+// ------------------ Middleware ------------------
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -22,57 +19,55 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
     secret: process.env.NODE_SESSION_SECRET,
     store: MongoStore.create({
-        mongoUrl: mongoUrl,
+        mongoUrl,
         crypto: { secret: process.env.MONGODB_SESSION_SECRET },
-        ttl: 60 * 60 // 1 hour
+        ttl: 60 * 60
     }),
     resave: false,
     saveUninitialized: false
 }));
 
-// -------------------- ROUTES --------------------
-
-app.get('/', (req, res) => {
-    res.render('home', {
-      username: req.session.username,
-      name: req.session.name
-    });
-  });
-  
-
-// GET Home Page
-app.get('/', (req, res) => {
-    if (!req.session.username) {
-        res.render('index', { loggedIn: false });
-    } else {
-        res.render('index', { loggedIn: true, name: req.session.name });
+function isAdmin(req, res, next) {
+    if (req.session.user_type === 'admin') {
+        return next();
     }
+    res.status(403).render('403', {
+        title: "Forbidden",
+        username: req.session.username,
+        user_type: req.session.user_type
+    });
+}
+
+// ------------------ Routes ------------------
+
+// Home Page
+app.get('/', (req, res) => {
+  res.render('home', {
+    title: 'Home',
+    username: req.session.username,
+    user_type: req.session.user_type,
+    name: req.session.name
+  });
 });
 
 
-
-// GET Signup Page
+// Signup
 app.get('/signup', (req, res) => {
-    res.render('signup', { error: null });
+    res.render('signup', {
+        title: "Signup",
+        error: null,
+        username: req.session.username,
+        user_type: req.session.user_type
+    });
 });
-
-const { MongoClient } = require('mongodb');
 
 app.post('/signup', async (req, res) => {
     const { name, email, password } = req.body;
-
-    // Basic field check
-    if (!name || !email || !password) {
-        return res.render('signup', { error: "All fields are required." });
-    }
-
-    // Joi validation to prevent NoSQL injection
     const schema = Joi.object({
         name: Joi.string().max(30).required(),
         email: Joi.string().email().required(),
         password: Joi.string().min(6).max(30).required()
     });
-
     const validation = schema.validate({ name, email, password });
     if (validation.error) {
         return res.render('signup', { error: "Invalid input format." });
@@ -91,49 +86,36 @@ app.post('/signup', async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        await users.insertOne({ name, email, password: hashedPassword });
+        await users.insertOne({ name, email, password: hashedPassword, user_type: "user" });
 
-        // Save session
         req.session.username = email;
         req.session.name = name;
+        req.session.user_type = "user";
 
         await client.close();
         res.redirect('/members');
-
     } catch (err) {
         console.error(err);
-        res.render('signup', { error: "Internal error occurred. Please try again." });
+        res.render('signup', { error: "Internal error occurred." });
     }
 });
 
-
-
-// GET Login Page
+// Login
 app.get('/login', (req, res) => {
-    res.render('login', { error: null });
-});
-
-// GET Members Page
-app.get('/members', (req, res) => {
-    if (!req.session.username) {
-        return res.redirect('/');
-    }
-
-    const images = ['cat1.jpg', 'cat2.jpg', 'cat3.jpg', 'cat4.jpg', 'cat5.jpg']; // use your own image filenames
-    const randomImage = images[Math.floor(Math.random() * images.length)];
-
-    res.render('members', { name: req.session.name, image: randomImage });
+    res.render('login', {
+        title: "Login",
+        error: null,
+        username: req.session.username,
+        user_type: req.session.user_type
+    });
 });
 
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
-
-    // Joi validation to prevent NoSQL injection
     const schema = Joi.object({
         email: Joi.string().email().required(),
         password: Joi.string().min(6).max(30).required()
     });
-
     const validation = schema.validate({ email, password });
     if (validation.error) {
         return res.render('login', { error: "Invalid input format." });
@@ -146,83 +128,97 @@ app.post('/login', async (req, res) => {
         const users = db.collection('users');
 
         const user = await users.findOne({ email });
-
-        if (!user) {
+        if (!user || !(await bcrypt.compare(password, user.password))) {
             await client.close();
-            return res.render('login', { error: "User not found." });
+            return res.render('login', { error: "Invalid credentials." });
         }
 
-        const passwordMatch = await bcrypt.compare(password, user.password);
-        if (!passwordMatch) {
-            await client.close();
-            return res.render('login', { error: "Invalid password." });
-        }
-
-        // Login success
         req.session.username = email;
         req.session.name = user.name;
+        req.session.user_type = user.user_type;
 
         await client.close();
         res.redirect('/members');
-
     } catch (err) {
         console.error(err);
         res.render('login', { error: "Internal error occurred." });
     }
 });
 
+// Members
+app.get('/members', (req, res) => {
+    if (!req.session.username) return res.redirect('/login');
+    const images = ['cat1.jpg', 'cat2.jpg', 'cat3.jpg', 'cat4.jpg', 'cat5.jpg'];
+    const randomImage = images[Math.floor(Math.random() * images.length)];
 
-// GET Logout
-app.get('/logout', (req, res) => {
-    req.session.destroy(() => {
-        res.redirect('/');
+    res.render('members', {
+        title: "Members",
+        name: req.session.name,
+        image: randomImage,
+        username: req.session.username,
+        user_type: req.session.user_type
     });
 });
 
-app.get('/', (req, res) => {
-    res.redirect('/login');
-  });
-  
+// Admin
+app.get('/admin', isAdmin, async (req, res) => {
+    const client = new MongoClient(mongoUrl);
+    await client.connect();
+    const db = client.db(process.env.MONGODB_DATABASE);
+    const users = await db.collection('users').find().toArray();
+    await client.close();
+
+    res.render('admin', {
+        title: "Admin Panel",
+        users,
+        username: req.session.username,
+        user_type: req.session.user_type
+    });
+});
+
+// Promote/Demote
+app.post('/promote', async (req, res) => {
+    const client = new MongoClient(mongoUrl);
+    await client.connect();
+    const db = client.db(process.env.MONGODB_DATABASE);
+    await db.collection('users').updateOne({ email: req.body.email }, { $set: { user_type: 'admin' } });
+    await client.close();
+    res.redirect('/admin');
+});
+
+app.post('/demote', async (req, res) => {
+    if (req.body.email === req.session.username) {
+        return res.render('admin', {
+            title: "Admin Panel",
+            error: "You cannot demote yourself.",
+            username: req.session.username,
+            user_type: req.session.user_type
+        });
+    }
+    const client = new MongoClient(mongoUrl);
+    await client.connect();
+    const db = client.db(process.env.MONGODB_DATABASE);
+    await db.collection('users').updateOne({ email: req.body.email }, { $set: { user_type: 'user' } });
+    await client.close();
+    res.redirect('/admin');
+});
+
+// Logout
+app.get('/logout', (req, res) => {
+    req.session.destroy(() => res.redirect('/login'));
+});
 
 // 404 Catch-All
 app.use((req, res) => {
-    res.status(404).render('404');
+  res.status(404).render('404', {
+    title: '404 Not Found',
+    username: req.session.username,
+    user_type: req.session.user_type
+  });
 });
 
-// ------------------ START SERVER ------------------
 
+// Start server
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
-
-app.get('/members', (req, res) => {
-    if (!req.session.username) {
-        return res.redirect('/');
-    }
-
-    const images = ['cat1.jpg', 'cat2.jpg', 'cat3.jpg']; // replace with your image filenames
-    const randomImage = images[Math.floor(Math.random() * images.length)];
-
-    res.render('members', { name: req.session.name, image: randomImage });
-});
-
-
-app.get('/logout', (req, res) => {
-    req.session.destroy(err => {
-        if (err) {
-            console.error("Session destruction error:", err);
-        }
-        res.redirect('/');
-    });
-});
-   
-app.use((req, res) => {
-    res.status(404).render('404');
-});
-
-app.get('/', (req, res) => {
-    res.render('login'); // or signup
-  });
-  
-
-  

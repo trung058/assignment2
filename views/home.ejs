@@ -1,18 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Home</title>
-</head>
-<body>
+<%- include('partials/header') %>
+
+<div class="text-center mt-5">
+  <h1 class="display-4">Welcome<% if (name) { %>, <%= name %>!<% } %></h1>
+  <p class="lead mb-4">
+    This is the home page 
+  </p>
+
   <% if (username) { %>
-    <h1>Welcome, <%= name %>!</h1>
-    <a href="/members">Go to Members Area</a> |
-    <a href="/logout">Logout</a>
+    <a href="/members" class="btn btn-primary btn-lg me-2">Go to Members Area</a>
+    <% if (user_type === "admin") { %>
+      <a href="/admin" class="btn btn-warning btn-lg me-2">Admin Area</a>
+    <% } %>
+    <a href="/logout" class="btn btn-outline-danger btn-lg">Logout</a>
   <% } else { %>
-    <h1>Welcome to the App</h1>
-    <a href="/signup">Sign Up</a> |
-    <a href="/login">Log In</a>
+    <a href="/login" class="btn btn-success btn-lg me-2">Login</a>
+    <a href="/signup" class="btn btn-outline-primary btn-lg">Sign Up</a>
   <% } %>
-</body>
-</html>
+</div>
+
+<%- include('partials/footer') %>

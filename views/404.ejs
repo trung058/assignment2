@@ -1,12 +1,11 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>404 Not Found</title>
-</head>
-<body>
-    <h1>404 - Page Not Found</h1>
-    <p>Oops! The page you're looking for doesn't exist.</p>
-    <a href="/">Back to Home</a>
-</body>
-</html>
+<%- include('partials/header') %>
+
+<div class="text-center mt-5">
+  <img src="/images/cat3.jpg" alt="Page Not Found" class="img-fluid mb-4" style="max-width: 300px;">
+  
+  <h1 class="display-4 text-danger">404 - Not Found</h1>
+  <p class="lead">Oops! The page you're looking for doesn't exist.</p>
+  <a href="/" class="btn btn-primary mt-3">Back to Home</a>
+</div>
+
+<%- include('partials/footer') %>

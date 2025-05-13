@@ -1,0 +1,3 @@
+<%- include('partials/header') %>
+<h1>Hello from the Test Page!</h1>
+<%- include('partials/footer') %>

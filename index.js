@@ -28,18 +28,12 @@ app.use(session({
 }));
 
 function isAdmin(req, res, next) {
-    if (!req.session.username) {
+    if (!req.session.username || req.session.user_type !== 'admin') {
         return res.redirect('/login');
-    }
-    if (req.session.user_type !== 'admin') {
-        return res.status(403).render('403', {
-            title: "Forbidden",
-            username: req.session.username,
-            user_type: req.session.user_type
-        });
     }
     next();
 }
+
 
 
 // ------------------ Routes ------------------
